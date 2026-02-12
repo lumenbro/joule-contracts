@@ -1,7 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol,
+    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Symbol,
 };
 use stellar_access::ownable::{self, Ownable};
 use stellar_contract_utils::pausable::{self, Pausable};
@@ -394,5 +394,14 @@ impl JouleToken {
             oracle::get_price_floor(&env),
             oracle::get_price_ceiling(&env),
         )
+    }
+
+    /// Owner upgrades the contract WASM. Requires owner auth.
+    #[only_owner]
+    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) {
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+        env.deployer().update_current_contract_wasm(wasm_hash);
     }
 }

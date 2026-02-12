@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
-    contract, contracterror, contractimpl, contracttype, token::TokenClient, Address, Env,
+    contract, contracterror, contractimpl, contracttype, token::TokenClient, Address, BytesN, Env,
     IntoVal, Map, Symbol, TryIntoVal, U256, Val, Vec,
 };
 
@@ -653,6 +653,16 @@ impl Rebalancer {
             .set(&DataKey::MaxStaleLedgers, &max_stale_ledgers);
         env.events()
             .publish((Symbol::new(&env, "max_stale_changed"),), max_stale_ledgers);
+    }
+
+    /// Owner upgrades the contract WASM. Requires owner auth.
+    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) {
+        require_initialized(&env);
+        require_owner(&env);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+        env.deployer().update_current_contract_wasm(wasm_hash);
     }
 
     /// Returns pool price vs oracle price status.

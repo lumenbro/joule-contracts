@@ -53,7 +53,9 @@ jobs:
 
       - name: Build and optimize contract
         run: |
-          stellar contract build --package ${{ matrix.package }} --optimize --out-dir out
+          stellar contract build --package ${{ matrix.package }} --optimize --out-dir out \
+            --meta source_repo=github:${{ github.repository }} \
+            --meta home_domain=lumenbro.com
           ls -la out/
 
       - name: Compute hash

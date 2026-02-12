@@ -97,17 +97,6 @@ jobs:
           files: |
             ${{ matrix.package }}_v${{ steps.meta.outputs.version }}.wasm
 
-      - name: Submit to StellarExpert
-        run: |
-          curl -s -X POST "https://api.stellar.expert/explorer/public/contract/validation" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "hash": "${{ steps.hash.outputs.hash }}",
-              "repository": "${{ github.server_url }}/${{ github.repository }}",
-              "commit": "${{ github.sha }}",
-              "package": "${{ matrix.package }}"
-            }' || echo "StellarExpert submission failed (non-fatal)"
-
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:

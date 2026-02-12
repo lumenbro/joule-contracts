@@ -24,13 +24,27 @@ Automated market maker peg maintenance via SushiSwap V3 pool.
 - Configurable bands, cooldown, slippage protection
 - Self-funding: mint rebalances earn USDC for future buybacks
 
-## Build
+## On-chain WASM Hashes
+
+| Contract | On-chain SHA256 |
+|----------|----------------|
+| joule-token | `dd83430703a4ff25047b46f621033a1633cd37abc7e8ebafd4a811bb9e287435` |
+| rebalancer | `0ab013dd9f4373f3052ad39dbb4f60def9495b77d301a3aab08405ac2b1052d8` |
+
+You can verify these hashes by fetching the on-chain WASM:
 
 ```bash
-stellar contract build
+stellar contract fetch --id CABREAOOPRZIIF6NKDOGPRHEMOYZIOJGTNPYPPSHA2EH7P2GW5JZMEKT --network mainnet -o joule_token.wasm
+sha256sum joule_token.wasm
 ```
 
-Optimized WASM output in `target/wasm32-unknown-unknown/release/`.
+## Build
+
+Requires [Stellar CLI](https://github.com/stellar/stellar-cli) v23.4.1 and Rust 1.92.0.
+
+```bash
+stellar contract build --optimize
+```
 
 ## Test
 
@@ -40,7 +54,11 @@ cargo test
 
 ## Verification
 
-Contract WASMs are verified via [StellarExpert](https://stellar.expert/explorer/public/contract/validation) using the [soroban-build-workflow](https://github.com/stellar-expert/soroban-build-workflow). Tag a release to trigger automated build + verification.
+Tagged releases trigger a GitHub Actions workflow that:
+1. Builds optimized WASMs with pinned Stellar CLI + Rust versions
+2. Computes and publishes SHA256 hashes
+3. Submits to [StellarExpert](https://stellar.expert) for contract validation
+4. Attests build provenance via GitHub Attestations
 
 ## License
 

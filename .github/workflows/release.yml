@@ -51,19 +51,17 @@ jobs:
           cargo --version
           stellar --version
 
-      - name: Build contract
+      - name: Build and optimize contract
         run: |
-          stellar contract build --package ${{ matrix.package }}
-
-      - name: Optimize WASM
-        run: |
-          stellar contract optimize --wasm target/wasm32-unknown-unknown/release/${{ matrix.package }}.wasm
-          ls -la target/wasm32-unknown-unknown/release/*.optimized.wasm
+          stellar contract build --package ${{ matrix.package }} --optimize --out-dir out
+          ls -la out/
 
       - name: Compute hash
         id: hash
         run: |
-          WASM_FILE="target/wasm32-unknown-unknown/release/${{ matrix.package }}.optimized.wasm"
+          # Cargo converts hyphens to underscores in output filenames
+          WASM_NAME=$(echo "${{ matrix.package }}" | tr '-' '_')
+          WASM_FILE="out/${WASM_NAME}.wasm"
           HASH=$(sha256sum "$WASM_FILE" | cut -d' ' -f1)
           echo "hash=$HASH" >> "$GITHUB_OUTPUT"
           echo "wasm_file=$WASM_FILE" >> "$GITHUB_OUTPUT"

@@ -16,6 +16,7 @@ permissions:
 
 env:
   STELLAR_CLI_VERSION: "23.4.1"
+  RUST_VERSION: "1.92.0"
 
 jobs:
   build-and-release:
@@ -31,19 +32,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Install Rust ${{ env.RUST_VERSION }} and wasm32 target
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libdbus-1-dev pkg-config
-
-      - name: Install Rust and wasm32 target
-        run: |
-          rustup update stable
+          rustup toolchain install ${{ env.RUST_VERSION }}
+          rustup default ${{ env.RUST_VERSION }}
           rustup target add wasm32-unknown-unknown
 
-      - name: Install Stellar CLI
+      - name: Install Stellar CLI (prebuilt binary)
         run: |
-          cargo install stellar-cli --version ${{ env.STELLAR_CLI_VERSION }} --locked
+          curl -fsSL "https://github.com/stellar/stellar-cli/releases/download/v${{ env.STELLAR_CLI_VERSION }}/stellar-cli-${{ env.STELLAR_CLI_VERSION }}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar xz
+          sudo mv stellar /usr/local/bin/
           stellar --version
 
       - name: Print versions

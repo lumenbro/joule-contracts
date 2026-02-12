@@ -99,6 +99,19 @@ jobs:
           files: |
             ${{ matrix.package }}_v${{ steps.meta.outputs.version }}.wasm
 
+      - name: Notify StellarExpert
+        run: |
+          curl -X POST "https://api.stellar.expert/explorer/public/contract-validation/match" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"repository\": \"${{ github.server_url }}/${{ github.repository }}\",
+              \"commitHash\": \"${{ github.sha }}\",
+              \"jobId\": \"${{ github.job }}\",
+              \"runId\": \"${{ github.run_id }}\",
+              \"contractHash\": \"${{ steps.hash.outputs.hash }}\",
+              \"packageName\": \"${{ matrix.package }}\"
+            }" --max-time 15
+
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:

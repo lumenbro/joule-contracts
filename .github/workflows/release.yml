@@ -14,19 +14,99 @@ permissions:
   contents: write
   attestations: write
 
-jobs:
-  release-joule-token:
-    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
-    with:
-      release_name: ${{ github.ref_name || inputs.release_name }}-joule-token
-      package: joule-token
-    secrets:
-      release_token: ${{ secrets.GITHUB_TOKEN }}
+env:
+  STELLAR_CLI_VERSION: "23.4.1"
 
-  release-rebalancer:
-    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@main
-    with:
-      release_name: ${{ github.ref_name || inputs.release_name }}-rebalancer
-      package: rebalancer
-    secrets:
-      release_token: ${{ secrets.GITHUB_TOKEN }}
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - package: joule-token
+            dir: contracts/joule-token
+          - package: rebalancer
+            dir: contracts/rebalancer
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust and wasm32 target
+        run: |
+          rustup update stable
+          rustup target add wasm32-unknown-unknown
+
+      - name: Install Stellar CLI
+        run: |
+          cargo install stellar-cli --version ${{ env.STELLAR_CLI_VERSION }} --locked
+          stellar --version
+
+      - name: Print versions
+        run: |
+          rustc --version
+          cargo --version
+          stellar --version
+
+      - name: Build contract
+        run: |
+          stellar contract build --package ${{ matrix.package }}
+
+      - name: Optimize WASM
+        run: |
+          stellar contract optimize --wasm target/wasm32-unknown-unknown/release/${{ matrix.package }}.wasm
+          ls -la target/wasm32-unknown-unknown/release/*.optimized.wasm
+
+      - name: Compute hash
+        id: hash
+        run: |
+          WASM_FILE="target/wasm32-unknown-unknown/release/${{ matrix.package }}.optimized.wasm"
+          HASH=$(sha256sum "$WASM_FILE" | cut -d' ' -f1)
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+          echo "wasm_file=$WASM_FILE" >> "$GITHUB_OUTPUT"
+          echo "WASM hash: $HASH"
+
+      - name: Get package version
+        id: meta
+        run: |
+          VERSION=$(cargo metadata --no-deps --format-version 1 | python3 -c "
+          import json,sys
+          data = json.load(sys.stdin)
+          for p in data['packages']:
+              if p['name'] == '${{ matrix.package }}':
+                  print(p['version'])
+          ")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release artifact
+        run: |
+          cp "${{ steps.hash.outputs.wasm_file }}" "${{ matrix.package }}_v${{ steps.meta.outputs.version }}.wasm"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}-${{ matrix.package }}
+          name: "${{ matrix.package }} v${{ steps.meta.outputs.version }} (CLI ${{ env.STELLAR_CLI_VERSION }})"
+          body: |
+            ## ${{ matrix.package }} v${{ steps.meta.outputs.version }}
+
+            Built with Stellar CLI ${{ env.STELLAR_CLI_VERSION }}
+
+            **WASM SHA256:** `${{ steps.hash.outputs.hash }}`
+          files: |
+            ${{ matrix.package }}_v${{ steps.meta.outputs.version }}.wasm
+
+      - name: Submit to StellarExpert
+        run: |
+          curl -s -X POST "https://api.stellar.expert/explorer/public/contract/validation" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "hash": "${{ steps.hash.outputs.hash }}",
+              "repository": "${{ github.server_url }}/${{ github.repository }}",
+              "commit": "${{ github.sha }}",
+              "package": "${{ matrix.package }}"
+            }' || echo "StellarExpert submission failed (non-fatal)"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "${{ matrix.package }}_v${{ steps.meta.outputs.version }}.wasm"

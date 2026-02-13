@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, Address, Env, MuxedAddress, String};
+use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
 use crate::JouleTokenClient;
 
@@ -46,8 +46,7 @@ fn test_transfer_no_fee() {
     let recipient = Address::generate(&env);
 
     client.mint(&agent, &1_000_000_000); // 100 JOULE
-    let recipient_muxed: MuxedAddress = recipient.clone().into();
-    client.transfer(&agent, &recipient_muxed, &1_000_000_000);
+    client.transfer(&agent, &recipient, &1_000_000_000);
 
     // No fee — recipient gets full amount
     assert_eq!(client.balance(&recipient), 1_000_000_000);
@@ -266,16 +265,12 @@ fn test_burn_from_with_allowance() {
 }
 
 #[test]
-fn test_transfer_with_address_backward_compat() {
-    // Verify that Address can be passed as MuxedAddress (backward compatibility)
+fn test_transfer_partial() {
     let (env, client, _owner, _oracle, agent) = setup();
     let recipient = Address::generate(&env);
 
     client.mint(&agent, &1_000_000_000);
-
-    // Convert Address to MuxedAddress (simulates what existing callers do)
-    let recipient_muxed: MuxedAddress = recipient.clone().into();
-    client.transfer(&agent, &recipient_muxed, &500_000_000);
+    client.transfer(&agent, &recipient, &500_000_000);
 
     assert_eq!(client.balance(&agent), 500_000_000);
     assert_eq!(client.balance(&recipient), 500_000_000);

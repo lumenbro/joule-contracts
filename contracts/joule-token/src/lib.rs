@@ -1,8 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, token::TokenInterface, Address, BytesN,
-    Env, MuxedAddress, String, Symbol,
+    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Symbol,
 };
 use stellar_access::ownable::{self, Ownable};
 use stellar_contract_utils::pausable::{self, Pausable};
@@ -57,50 +56,7 @@ pub enum JouleError {
 #[contract]
 pub struct JouleToken;
 
-// ─── SEP-41 Token Interface (canonical trait for indexer detection) ──
-
-#[contractimpl]
-impl TokenInterface for JouleToken {
-    fn allowance(env: Env, from: Address, spender: Address) -> i128 {
-        Base::allowance(&env, &from, &spender)
-    }
-
-    fn approve(env: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
-        Base::approve(&env, &from, &spender, amount, expiration_ledger);
-    }
-
-    fn balance(env: Env, id: Address) -> i128 {
-        Base::balance(&env, &id)
-    }
-
-    fn transfer(env: Env, from: Address, to: MuxedAddress, amount: i128) {
-        Base::transfer(&env, &from, &to, amount);
-    }
-
-    fn transfer_from(env: Env, spender: Address, from: Address, to: Address, amount: i128) {
-        Base::transfer_from(&env, &spender, &from, &to, amount);
-    }
-
-    fn burn(env: Env, from: Address, amount: i128) {
-        Base::burn(&env, &from, amount);
-    }
-
-    fn burn_from(env: Env, spender: Address, from: Address, amount: i128) {
-        Base::burn_from(&env, &spender, &from, amount);
-    }
-
-    fn decimals(env: Env) -> u32 {
-        Base::decimals(&env)
-    }
-
-    fn name(env: Env) -> String {
-        Base::name(&env)
-    }
-
-    fn symbol(env: Env) -> String {
-        Base::symbol(&env)
-    }
-}
+// ─── SEP-41 Token Functions (Address-based signatures for indexer compatibility) ──
 
 // Ownable (2-step transfer)
 #[contractimpl]
@@ -124,7 +80,49 @@ impl Pausable for JouleToken {
 
 #[contractimpl]
 impl JouleToken {
-    /// Total token supply (not part of TokenInterface but commonly expected).
+    // ─── SEP-41 functions (plain Address for indexer detection) ─────
+
+    pub fn allowance(env: Env, from: Address, spender: Address) -> i128 {
+        Base::allowance(&env, &from, &spender)
+    }
+
+    pub fn approve(env: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
+        Base::approve(&env, &from, &spender, amount, expiration_ledger);
+    }
+
+    pub fn balance(env: Env, id: Address) -> i128 {
+        Base::balance(&env, &id)
+    }
+
+    pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
+        from.require_auth();
+        Base::update(&env, Some(&from), Some(&to), amount);
+    }
+
+    pub fn transfer_from(env: Env, spender: Address, from: Address, to: Address, amount: i128) {
+        Base::transfer_from(&env, &spender, &from, &to, amount);
+    }
+
+    pub fn burn(env: Env, from: Address, amount: i128) {
+        Base::burn(&env, &from, amount);
+    }
+
+    pub fn burn_from(env: Env, spender: Address, from: Address, amount: i128) {
+        Base::burn_from(&env, &spender, &from, amount);
+    }
+
+    pub fn decimals(env: Env) -> u32 {
+        Base::decimals(&env)
+    }
+
+    pub fn name(env: Env) -> String {
+        Base::name(&env)
+    }
+
+    pub fn symbol(env: Env) -> String {
+        Base::symbol(&env)
+    }
+
     pub fn total_supply(env: Env) -> i128 {
         Base::total_supply(&env)
     }

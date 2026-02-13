@@ -1,13 +1,13 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Symbol,
+    contract, contracterror, contractimpl, contracttype, token::TokenInterface, Address, BytesN,
+    Env, MuxedAddress, String, Symbol,
 };
 use stellar_access::ownable::{self, Ownable};
 use stellar_contract_utils::pausable::{self, Pausable};
 use stellar_macros::{only_owner, when_not_paused};
-use stellar_tokens::fungible::burnable::FungibleBurnable;
-use stellar_tokens::fungible::{Base, ContractOverrides, FungibleToken};
+use stellar_tokens::fungible::Base;
 
 mod oracle;
 #[cfg(test)]
@@ -52,26 +52,55 @@ pub enum JouleError {
     PriceNotSet = 11,
 }
 
-// ─── Default Transfer (no fee) ───────────────────────────────────
-
-pub struct NoFee;
-
-impl ContractOverrides for NoFee {}
-
 // ─── Contract ────────────────────────────────────────────────────
 
 #[contract]
 pub struct JouleToken;
 
-// SEP-41 Token Interface (fee-free transfers)
-#[contractimpl]
-impl FungibleToken for JouleToken {
-    type ContractType = NoFee;
-}
+// ─── SEP-41 Token Interface (canonical trait for indexer detection) ──
 
-// Burnable (SEP-41 compliance)
 #[contractimpl]
-impl FungibleBurnable for JouleToken {}
+impl TokenInterface for JouleToken {
+    fn allowance(env: Env, from: Address, spender: Address) -> i128 {
+        Base::allowance(&env, &from, &spender)
+    }
+
+    fn approve(env: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
+        Base::approve(&env, &from, &spender, amount, expiration_ledger);
+    }
+
+    fn balance(env: Env, id: Address) -> i128 {
+        Base::balance(&env, &id)
+    }
+
+    fn transfer(env: Env, from: Address, to: MuxedAddress, amount: i128) {
+        Base::transfer(&env, &from, &to, amount);
+    }
+
+    fn transfer_from(env: Env, spender: Address, from: Address, to: Address, amount: i128) {
+        Base::transfer_from(&env, &spender, &from, &to, amount);
+    }
+
+    fn burn(env: Env, from: Address, amount: i128) {
+        Base::burn(&env, &from, amount);
+    }
+
+    fn burn_from(env: Env, spender: Address, from: Address, amount: i128) {
+        Base::burn_from(&env, &spender, &from, amount);
+    }
+
+    fn decimals(env: Env) -> u32 {
+        Base::decimals(&env)
+    }
+
+    fn name(env: Env) -> String {
+        Base::name(&env)
+    }
+
+    fn symbol(env: Env) -> String {
+        Base::symbol(&env)
+    }
+}
 
 // Ownable (2-step transfer)
 #[contractimpl]
@@ -91,67 +120,15 @@ impl Pausable for JouleToken {
     }
 }
 
-// ─── SEP-41 Token Interface (explicit exports) ─────────────────
-
-#[contractimpl]
-impl JouleToken {
-    pub fn total_supply(env: Env) -> i128 {
-        <JouleToken as FungibleToken>::total_supply(&env)
-    }
-
-    pub fn balance(env: Env, account: Address) -> i128 {
-        <JouleToken as FungibleToken>::balance(&env, account)
-    }
-
-    pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
-        <JouleToken as FungibleToken>::transfer(&env, from, to.into(), amount);
-    }
-
-    pub fn transfer_from(
-        env: Env,
-        spender: Address,
-        from: Address,
-        to: Address,
-        amount: i128,
-    ) {
-        <JouleToken as FungibleToken>::transfer_from(&env, spender, from, to, amount);
-    }
-
-    pub fn approve(
-        env: Env,
-        owner: Address,
-        spender: Address,
-        amount: i128,
-        live_until_ledger: u32,
-    ) {
-        <JouleToken as FungibleToken>::approve(&env, owner, spender, amount, live_until_ledger);
-    }
-
-    pub fn allowance(env: Env, owner: Address, spender: Address) -> i128 {
-        <JouleToken as FungibleToken>::allowance(&env, owner, spender)
-    }
-
-    pub fn decimals(env: Env) -> u32 {
-        <JouleToken as FungibleToken>::decimals(&env)
-    }
-
-    pub fn name(env: Env) -> soroban_sdk::String {
-        <JouleToken as FungibleToken>::name(&env)
-    }
-
-    pub fn symbol(env: Env) -> soroban_sdk::String {
-        <JouleToken as FungibleToken>::symbol(&env)
-    }
-
-    pub fn burn(env: Env, from: Address, amount: i128) {
-        <JouleToken as FungibleBurnable>::burn(&env, from, amount);
-    }
-}
-
 // ─── JOULE-Specific Functions ────────────────────────────────────
 
 #[contractimpl]
 impl JouleToken {
+    /// Total token supply (not part of TokenInterface but commonly expected).
+    pub fn total_supply(env: Env) -> i128 {
+        Base::total_supply(&env)
+    }
+
     pub fn initialize(env: Env, owner: Address, oracle: Address) {
         ownable::set_owner(&env, &owner);
         Base::set_metadata(

@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, Address, Env, String};
+use soroban_sdk::{testutils::Address as _, Address, Env, MuxedAddress, String};
 
 use crate::JouleTokenClient;
 
@@ -46,7 +46,8 @@ fn test_transfer_no_fee() {
     let recipient = Address::generate(&env);
 
     client.mint(&agent, &1_000_000_000); // 100 JOULE
-    client.transfer(&agent, &recipient, &1_000_000_000);
+    let recipient_muxed: MuxedAddress = recipient.clone().into();
+    client.transfer(&agent, &recipient_muxed, &1_000_000_000);
 
     // No fee — recipient gets full amount
     assert_eq!(client.balance(&recipient), 1_000_000_000);
@@ -234,6 +235,65 @@ fn test_custom_bounds_reject_below() {
     let (_env, client, _owner, _oracle, _agent) = setup();
     client.set_price_bounds(&5_000, &50_000);
     client.set_price(&3_000, &1_u64); // below new floor
+}
+
+// ─── SEP-41 burn / burn_from Tests ──────────────────────────────
+
+#[test]
+fn test_burn() {
+    let (_env, client, _owner, _oracle, agent) = setup();
+    client.mint(&agent, &1_000_000_000);
+    client.burn(&agent, &300_000_000);
+    assert_eq!(client.balance(&agent), 700_000_000);
+    assert_eq!(client.total_supply(), 700_000_000);
+}
+
+#[test]
+fn test_burn_from_with_allowance() {
+    let (env, client, _owner, _oracle, agent) = setup();
+    let spender = Address::generate(&env);
+
+    client.mint(&agent, &1_000_000_000);
+    // Agent approves spender to burn up to 500 JOULE
+    client.approve(&agent, &spender, &500_000_000, &1000);
+    assert_eq!(client.allowance(&agent, &spender), 500_000_000);
+
+    // Spender burns 200 JOULE from agent's balance
+    client.burn_from(&spender, &agent, &200_000_000);
+    assert_eq!(client.balance(&agent), 800_000_000);
+    assert_eq!(client.allowance(&agent, &spender), 300_000_000);
+    assert_eq!(client.total_supply(), 800_000_000);
+}
+
+#[test]
+fn test_transfer_with_address_backward_compat() {
+    // Verify that Address can be passed as MuxedAddress (backward compatibility)
+    let (env, client, _owner, _oracle, agent) = setup();
+    let recipient = Address::generate(&env);
+
+    client.mint(&agent, &1_000_000_000);
+
+    // Convert Address to MuxedAddress (simulates what existing callers do)
+    let recipient_muxed: MuxedAddress = recipient.clone().into();
+    client.transfer(&agent, &recipient_muxed, &500_000_000);
+
+    assert_eq!(client.balance(&agent), 500_000_000);
+    assert_eq!(client.balance(&recipient), 500_000_000);
+}
+
+#[test]
+fn test_transfer_from_with_allowance() {
+    let (env, client, _owner, _oracle, agent) = setup();
+    let spender = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    client.mint(&agent, &1_000_000_000);
+    client.approve(&agent, &spender, &500_000_000, &1000);
+
+    client.transfer_from(&spender, &agent, &recipient, &300_000_000);
+    assert_eq!(client.balance(&agent), 700_000_000);
+    assert_eq!(client.balance(&recipient), 300_000_000);
+    assert_eq!(client.allowance(&agent, &spender), 200_000_000);
 }
 
 // ─── Burn for Compute Tests ─────────────────────────────────────
